@@ -19,16 +19,13 @@ Base = automap_base()
 Base.prepare(engine, reflect=True)
 
 #assign each class to a variable
-measurement = Base.classes.measurement
-station = Base.classes.station
+Measurement = Base.classes.measurement
+Station = Base.classes.station
 
 
 # create an app
 app = Flask(__name__)
 
-
-# date one year before the most recent recored date
-year = '2016-08-23'
 
 # start homepage
 @app.route("/")
@@ -45,19 +42,20 @@ def precipitation():
     session = Session(engine)
 
     # query precipitation results from the last 12 months
-    precipitation = session.query(measurement.date, measurement.prcp).filter(measurement.date >= year).all()
+    precipitation = session.query(Measurement.date, Measurement.prcp).\
+        filter(Measurement.date.between('2016-08-23', '2017-08-23')).all()
 
     session.close()
 
     # convert query results into a dictionary
     # 'date' = key , 'prcp' = value
     prcp_data = []
-    for date in precipitation:
+    for date, prcp in precipitation:
         prcp_dict = {}
-        prcp_dict["date"] = 'prcp'
+        prcp_dict[date] = prcp
         prcp_data.append(prcp_dict)
 
-    return jsonify(precipitation)
+    return jsonify(prcp_data)
 
 
 @app.route("/api/v1.0/stations")
@@ -65,12 +63,22 @@ def stations():
     #start session
     session = Session(engine)
 
-    # query to get list of stations
-    stations = session.query(measurement.station).all()
+    # query to get list of station info
+    station_data = session.query(Station.station, Station.name, Station.latitude, Station.longitude, Station.elevation).all()
 
     session.close()
 
-    return jsonify(stations)
+    all_stations = []
+    for station, name, latitude, longitude, elevation in station_data:
+        station_dict = {}
+        station_dict["station"] = station
+        station_dict["name"] = name
+        station_dict["latitude"] = latitude
+        station_dict["longitude"] = longitude
+        station_dict["elevation"] = elevation
+        all_stations.append(station_dict)
+
+    return jsonify(all_stations)
 
 
 @app.route("/api/v1.0/tobs")
@@ -79,13 +87,18 @@ def tobs():
     session = Session(engine)
 
     # query the dates and temperature observations of the most-active station for the previous year of data
-    tobs = session.query(measurement.tobs).filter(measurement.station == 'USC00519281').filter(measurement.date >= year).all()
+    temperature = session.query(Measurement.date, Measurement.tobs).filter(Measurement.station == 'USC00519281').\
+        filter(Measurement.date.between('2016-08-23', '2017-08-23')).all()
 
     session.close()
 
-    temps = list(np.ravel(tobs))
+    all_temps = []
+    for date, tobs in temperature:
+        temp_dict = {}
+        temp_dict[date] = tobs
+        all_temps.append(temp_dict)
 
-    return jsonify(temps)
+    return jsonify(all_temps)
 
 
 
