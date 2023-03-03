@@ -1,6 +1,3 @@
-import numpy as np
-import datetime as dt
-
 # import Flask
 from flask import Flask, jsonify
 
@@ -20,7 +17,7 @@ Base = automap_base()
 Base.prepare(engine, reflect=True)
 
 #assign each class to a variable
-measurement = Base.classes.measurement
+Measurement = Base.classes.measurement
 Station = Base.classes.station
 
 
@@ -32,12 +29,12 @@ app = Flask(__name__)
 @app.route("/")
 def home():
     return (
-        f"Available Routes:<br/>"
-        f"<strong>/api/v1.0/precipitation</strong><br/>"
-        f"<strong>/api/v1.0/stations</strong><br/>"
-        f"<strong>/api/v1.0/tobs</strong><br/>"
-        f"<strong>/api/v1.0/start</strong>  (REPLACE START WITH ACTUAL DATE - MUST FORMAT: yyyy-mm-dd) <br/>"
-        f"<strong>/api/v1.0/start/end</strong>  (REPLACE START WITH ACTUAL DATE - MUST FORMAT: yyyy-mm-dd/yyyy-mm-dd)")
+        f"<strong>Available Routes:</strong><br/>"
+        f"/api/v1.0/precipitation<br/>"
+        f"/api/v1.0/stations<br/>"
+        f"/api/v1.0/tobs<br/>"
+        f"/api/v1.0/&lt;start&gt;    <strong>(REPLACE &lt;START&gt; WITH ACTUAL DATE - MUST FORMAT: yyyy-mm-dd)</strong><br/>"
+        f"/api/v1.0/&lt;start&gt;/&lt;end&gt;   <strong>(REPLACE &lt;START&gt; AND &lt;END&gt; WITH ACTUAL DATE - MUST FORMAT: yyyy-mm-dd/yyyy-mm-dd)</strong>")
 
 @app.route("/api/v1.0/precipitation")
 def precipitation():
@@ -46,12 +43,13 @@ def precipitation():
     session = Session(engine)
 
     # query precipitation results from the last 12 months
-    precipitation = session.query(measurement.date, measurement.prcp).\
-        filter(measurement.date.between('2016-08-23', '2017-08-23')).all()
-
+    precipitation = session.query(Measurement.date, Measurement.prcp).\
+        filter(Measurement.date.between('2016-08-23', '2017-08-23')).all()
+    
+    #close session
     session.close()
 
-    # convert query results into a dictionary
+    # convert query results into a jsonified dictionary
     # 'date' = key , 'prcp' = value
     prcp_data = []
     for date, prcp in precipitation:
@@ -65,7 +63,7 @@ def precipitation():
 @app.route("/api/v1.0/stations")
 def stations():
     """Return a JSON list of stations from the dataset"""
-    #start session
+    
     session = Session(engine)
 
     # query to get list of station info
@@ -73,6 +71,7 @@ def stations():
 
     session.close()
 
+    #convert results into a jsonified dictionary
     all_stations = []
     for station, name, latitude, longitude, elevation in station_data:
         station_dict = {}
@@ -89,15 +88,16 @@ def stations():
 @app.route("/api/v1.0/tobs")
 def tobs():
     """Return a JSON list of temperatures observations for the previous year using the most-active station"""
-    # start session
+   
     session = Session(engine)
 
     # query the dates and temperature observations of the most-active station for the previous year of data
-    temperature = session.query(measurement.date, measurement.tobs).filter(measurement.station == 'USC00519281').\
-        filter(measurement.date.between('2016-08-23', '2017-08-23')).all()
+    temperature = session.query(Measurement.date, Measurement.tobs).filter(Measurement.station == 'USC00519281').\
+        filter(Measurement.date.between('2016-08-23', '2017-08-23')).all()
 
     session.close()
 
+    # #convert results into a jsonified dictionary
     all_temps = []
     for date, tobs in temperature:
         temp_dict = {}
@@ -105,55 +105,62 @@ def tobs():
         all_temps.append(temp_dict)
 
     return jsonify(all_temps)
+    
+
 
 @app.route("/api/v1.0/<start>")
-@app.route("/api/v1.0/<start>/<end>")
-def date(start, end=None):
+def start_date(start):
+    """Returns JSON the min, max, and average temperatures calculated from the given start date to the end of the dataset"""
 
+      
     session = Session(engine)
-    # if start and end date is given
 
-    start = dt.datetime.strptime(start, '%Y-%m-%d')
-    end = dt.datetime.strptime(end, '%Y-%m-%d')
-
+    # query min, max, and average of all temperatures with specified start range
+    start_date = session.query(func.min(Measurement.tobs),func.max(Measurement.tobs),func.avg(Measurement.tobs)).\
+        filter(Measurement.date >= start).all()
     
-    if not end: 
-        start_date = session.query(func.min(measurement.tobs),func.max(measurement.tobs),func.avg(measurement.tobs)).\
-        filter(measurement.date.between(start, end)).all()
-        
-
-    #if no end date is given
-    else:
-
-        start_date = session.query(func.min(measurement.tobs),func.max(measurement.tobs),func.avg(measurement.tobs)).\
-        filter(measurement.date >= start).all()
-        
-        
-        #filter(measurement.date.between(start, end)).all()
-
-    
+   
     session.close()
     
-
-    date_list = []
+    # convert results into a jsonified dictionary; 'key '= min, max, and avg : 'value' = espective value for given date 
+    start_date_list = []
     for min, max, avg in start_date:
+        start_date_dict = {}
+        start_date_dict['min_temp'] = min
+        start_date_dict['max_temp'] = max
+        start_date_dict['avg_temp'] = avg
+
+        start_date_list.append(start_date_dict)
+
+    return jsonify(start_date_list)
+
+
+
+@app.route("/api/v1.0/<start>/<end>")
+def start_end_date(start, end):
+    """Returns the min, max, and average temperatures calculated from the given start date to the given end date"""
+
+    session = Session(engine)
+ 
+    # query min, max, and average of all temperatures with specified start to end range
+    start_end_date = session.query(func.min(Measurement.tobs),func.max(Measurement.tobs),func.avg(Measurement.tobs)).\
+    filter(Measurement.date.between(start, end)).all()
+     
+    session.close()
+    
+    #convert results into a jsonified dictionary
+    end_date_list = []
+    for min, max, avg in start_end_date:
         date_dict = {}
         date_dict['min_temp'] = min
         date_dict['max_temp'] = max
         date_dict['avg_temp'] = avg
 
-        date_list.append(date_dict)
+        end_date_list.append(date_dict)
 
-        return jsonify(date_list)
+    return jsonify(end_date_list)
     
-
 
         
 if __name__ == '__main__':
     app.run(debug=True)
-
-
-
-
-
-
