@@ -14,4 +14,4 @@ SQLAlchemy and Python was used to query climate data from areas around Hawaii. T
 
 
 3. **Climate APP - Flask API**
-4.  - static and dynamic routes were created based on previous queries
+  - static and dynamic routes were created based on previous queries
